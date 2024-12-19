@@ -1,0 +1,64 @@
+agent Maintask4 {
+    module EIS ei;
+    module Console C;
+    module System S;
+    module Debug D;
+
+    types local {
+    formula is_built(boolean);
+}
+
+initial is_built(false);
+
+rule +!main(list args) {
+    ei.launch("hw", "dependency/tower-1.3.0.jar");
+    ei.init();
+    ei.start();
+    ei.link("gripper");
+    C.println("Press New Block until block d is created...");
+}
+
+// Event: When block D is placed on the table (appears for the first time)
+rule +$ei.event(block("d")) {
+    C.println("You did it! Block D is created and on the table.");
+    // No further actions with block D, now we start with block A
+    ei.pickup("a");  // Pick up block A
+}
+
+// Event: When holding block A (after picking it up)
+rule +$ei.event(holding("a")) : is_built(false) {
+    ei.putdown("a", "b");  // Place block A on block B
+}
+
+// Event: When block A is on block B
+rule +$ei.event(on("a", "b")) {
+    if (~is_built(true)) {
+        D.dumpBeliefs();  // Dump current beliefs (debugging step)
+        -is_built(false);  // Update to indicate the tower is built
+        +is_built(true);
+        C.println("TOWER BUILT");  // Print "TOWER BUILT"
+        D.dumpBeliefs();  // Dump updated beliefs (debugging step)
+
+        S.sleep(2000);  // Wait for 2 seconds
+        ei.pickup("a");  // Pick up block A again
+    }
+}
+
+// Event: When holding block A again after 2 seconds
+rule +$ei.event(holding("a")) {
+    ei.putdown("a", "table");  // Place block A on the table
+}
+
+// Event: When block A is placed on the table
+rule +$ei.event(on("a", "table")) {
+    C.println("FINISHED");  // Print "FINISHED"
+}
+
+// Generic event handler to capture new perceptions
+rule +$ei.event(funct belief) {
+    C.println("New Perception Event: " + belief);
+}
+
+
+
+}

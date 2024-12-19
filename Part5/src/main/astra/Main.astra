@@ -1,0 +1,136 @@
+agent Main {
+    module EIS eiModule;
+    module Console console;
+    module System system;
+    module Math math;
+    module Prelude prelude;
+
+    types blocks {
+        formula is_free(string);
+        formula random_tower(list);
+    }
+
+    rule +!main(list args) {
+        eiModule.launch("hw", "dependency/tower-1.3.0.jar");
+        eiModule.init();
+        eiModule.start();
+        eiModule.link("gripper");
+
+        console.println("Waiting for block g to appear...");
+    }
+
+    rule +$eiModule.event(block("g")) {
+        console.println("Block g has been created!");
+        !random_tower([ "a", "b", "c", "d", "e", "f", "g" ]);
+    }
+
+    // Rule for building a random tower
+    rule +!random_tower(list blocks) {
+        list shuffled;
+        int towerHeight;
+
+        // Shuffle the blocks list
+        !shuffle(blocks, shuffled, 10);
+        console.println("Shuffled blocks: " + shuffled);
+
+        // Randomly choose a tower height between 2 and 7
+        towerHeight = math.randomInt() % 6 + 2;
+        console.println("Building tower with height: " + towerHeight);
+
+        list towerBlocks = [];
+        int i = 0;
+        while (i < towerHeight) {
+            string block = at_index(shuffled, i, string);
+            towerBlocks = towerBlocks + [block];  // Append block to the list
+            i = i + 1;
+        }
+
+        console.println("Blocks for this tower: " + towerBlocks);
+
+        // Build the tower
+        !build_tower(towerBlocks);
+
+        // Sleep for 2 seconds, then repeat the process
+        system.sleep(2000);
+        !random_tower(blocks);
+    }
+
+    // Build a tower from a list of blocks
+rule +!build_tower(list towerBlocks) {
+    if (list_count(towerBlocks) > 1) {
+        string top = at_index(towerBlocks, 0, string);
+        list rest = [ ];  // Initialize an empty list
+        rest = tail(towerBlocks);  // Use tail() to get the rest of the list
+
+        // Place the first block on the table
+        !place_on(top, "table");
+
+        // Iterate through the rest of the blocks and place them
+        forall (string block : rest) {
+            !place_on(block, top);  // Place each block on the previous top
+            top = block;  // Update top to the current block
+        }
+    }
+}
+
+
+
+    // Logic to handle placing a block on another block
+    rule +!place_on(string A, string B) : eiModule.on(A, B) {
+        console.println(A + " is already placed on " + B);
+    }
+
+    rule +!place_on(string A, string B) : eiModule.holding(A) & is_free(B) {
+        console.println("Placing " + A + " on " + B);
+        eiModule.putdown(A, B);
+        wait(eiModule.on(A, B));
+    }
+
+    rule +!place_on(string A, string B) : ~eiModule.holding(A) {
+        console.println("Picking up " + A + " to place on " + B);
+        !is_holding(A);
+        !place_on(A, B);
+    }
+
+    rule +!place_on(string A, string B) : ~is_free(B) {
+        console.println(B + " is not free. Freeing it...");
+        !is_holding(A);
+        !is_free(B);
+        !place_on(A, B);
+    }
+
+    // Logic for handling holding and freeing blocks
+    rule +!is_holding(string A) : eiModule.holding(A) {
+        console.println("Already holding " + A);
+    }
+
+    rule +!is_holding(string A) : is_free(A) & ~eiModule.holding(A) {
+        eiModule.pickup(A);
+        wait(eiModule.holding(A));
+    }
+
+    // Already free, no need to free again
+    rule +!is_free(string A) : is_free(A) { }
+
+    // Free the block by moving the one on top of it to the table
+    rule +!is_free(string A) : eiModule.on(string X, A) {
+        !is_holding(X);
+        eiModule.putdown(X, "table");
+        wait(eiModule.on(X, "table"));
+    }
+
+    // Event triggers when A is placed on B
+    rule +$eiModule.event(on(string A, string B)) {
+        console.println(A + " placed on " + B);
+    }
+
+    // Event when holding a block
+    rule +$eiModule.event(holding(string A)) {
+        console.println("Picked up: " + A);
+    }
+
+    // Handling belief update events
+    rule +$eiModule.event(funct A) {
+        console.println("Belief update: " + A);
+    }
+}

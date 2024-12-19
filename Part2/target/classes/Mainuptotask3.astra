@@ -1,0 +1,93 @@
+agent Main {
+    module EIS ei;
+    module Console C;
+    module System S;
+
+    // Define types for blocks and events
+    types block {
+        formula free(string);            // A block can be free
+        formula tower(string, string, string); // Tower of 3 blocks
+        formula on(string, string);        // A block being on another block
+        formula holding(string);             // A block is being held
+    }
+
+    // Inference rule to check if a block is free (nothing is on top of it)
+    inference free(string A) :- ~ei.on(string _, A);
+
+    // Inference rule to check if a 3-block tower exists
+    inference tower(string A, string B, string C) :-
+        ei.on(A, B) & ei.on(B, C) & ei.on(C, "table");
+
+    rule +!main(list args) {
+        ei.launch("hw","dependency/tower-1.3.0.jar");
+        ei.init();
+        ei.start();
+        ei.link("gripper");
+        C.println("Press New Block until block d is created...");
+        wait(ei.block("d"));  // Wait for block d to appear
+        C.println("Block D created, now building tower ABC...");
+        !tower("a", "b", "c");  // Start building the tower a on b on c
+    }
+
+    // Rule to build a tower with blocks A, B, and C
+    rule +!tower(string A, string B, string C) {
+        // Block C is placed on the table
+        ei.putdown(C, "table");
+        wait(ei.on(C, "table"));
+
+        // Pick up and place Block B on top of Block C
+        ei.pickup(B);
+        wait(ei.holding(B));
+        ei.putdown(B, C);
+        wait(ei.on(B, C));
+
+        // Pick up and place Block A on top of Block B
+        ei.pickup(A);
+        wait(ei.holding(A));
+        ei.putdown(A, B);
+        wait(ei.on(A, B));
+
+        // Print a message indicating the tower is built
+        C.println("Tower built with blocks: " + A + ", " + B + ", " + C);
+    }
+
+    // Ensure that block A is on block B if not already there
+    rule +!on(string A, string B) : ei.on(A, B) {}
+
+    // Pickup block A if needed
+    rule +!holding(string A) : free(A) {
+        ei.pickup(A);  // Pick up block A
+        wait(ei.holding(A));
+        C.println("Holding block: " + A);
+    }
+
+    // Pickup block B if needed
+    rule +!holding(string B) : free(B) {
+        ei.pickup(B);  // Pick up block B
+        wait(ei.holding(B));
+        C.println("Holding block: " + B);
+    }
+
+    // Free block B by removing any block on top of it
+    rule +!free(string B) : ei.on(string X, B) {
+        !holding(X);  // Ensure X is no longer on B
+        C.println("Block " + B + " is now free.");
+    }
+
+    // A new perception when holding a block
+    rule +$ei.event(holding(string A)) {
+        C.println("Holding block: " + A);
+    }
+
+    // A new perception when block A is on block B
+    rule +$ei.event(on(string A, string B)) {
+        C.println("Block " + A + " is on block " + B);
+    }
+
+    // A rule to remove a block from its position to free the block below it
+    rule +!free(string B) {
+        ei.pickup(B);  // Pick up block B to free it
+        wait(ei.holding(B));
+        C.println("Block " + B + " is now free.");
+    }
+}

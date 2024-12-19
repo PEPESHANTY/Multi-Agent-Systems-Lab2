@@ -1,0 +1,91 @@
+agent Main {
+    module EIS ei;
+    module Console C;
+    module System S;
+
+    rule +!main(list args) {
+        ei.launch("hw","dependency/tower-1.3.0.jar");
+        ei.init();
+        ei.start();
+        ei.link("gripper");
+        C.println("Press New Block until block d is created...");
+        wait(ei.block("d"));
+        C.println("You did it!");
+
+        // Build the first tower with blocks A, B, and C
+        !tower("a", "b", "c");
+    }
+
+    rule +$ei.event(holding(string Y)) {
+        C.println("I picked up: " + Y);
+    }
+
+    rule +$ei.event(funct Y) {
+        C.println("Handling belief update: " + Y);
+    }
+
+    // Build the first tower (A on B, B on C, C on table)
+    rule +!tower(string A, string B, string C) {
+        // Block C is placed on the table
+        ei.putdown(C, "table");
+        wait(ei.on(C, "table"));
+
+        // Block B is placed on top of block C
+        ei.pickup(B);
+        wait(ei.holding(B));
+        ei.putdown(B, C);
+        wait(ei.on(B, C));
+
+        // Block A is placed on top of block B
+        ei.pickup(A);
+        wait(ei.holding(A));
+        ei.putdown(A, B);
+        wait(ei.on(A, B));
+
+        // Print a message indicating the first tower is built
+        C.println("First Tower built with blocks: " + A + ", " + B + ", " + C);
+
+        // Reset blocks after tower is built
+        !reset_blocks();
+    }
+
+    // Reset blocks to original positions before building the second tower
+    rule +!reset_blocks() {
+        // Remove A from the top of B
+        ei.pickup("a");
+        wait(ei.holding("a"));
+        ei.putdown("a", "table");
+        wait(ei.on("a", "table"));
+
+        // Remove B from the top of C
+        // ei.pickup("b");
+        // wait(ei.holding("b"));
+        // ei.putdown("b", "table");
+        // wait(ei.on("b", "table"));
+
+        // Now trigger the second tower after resetting the blocks
+        !tower2("d", "b", "c");
+    }
+
+    // Build the second tower (D on B, C on table)
+    rule +!tower2(string D, string B, string C) {
+        // Ensure C is on the table
+        ei.putdown(C, "table");
+        wait(ei.on(C, "table"));
+
+        // Place B on top of C (if it is not already in place)
+        // ei.pickup(B);
+        // wait(ei.holding(B));
+        // ei.putdown(B, C);
+        // wait(ei.on(B, C));
+
+        // Place D on top of B
+        ei.pickup(D);
+        wait(ei.holding(D));
+        ei.putdown(D, B);
+        wait(ei.on(D, B));
+
+        // Print a message indicating the second tower is built
+        C.println("Second Tower built with blocks: " + D + ", " + B + ", " + C);
+    }
+}
